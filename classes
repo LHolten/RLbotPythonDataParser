@@ -9,7 +9,7 @@ class Packet:
         self.game_ball = GameBall(packet.game_ball)
         self.game_info = GameInfo(packet.game_info)
         self.dropshot_tiles = []
-        #self.teams: []
+        #   self.teams: []
 
         for car in range(0, self.num_cars):
             self.game_cars.append(Car(packet.game_cars[car]))
@@ -22,8 +22,8 @@ class Packet:
             self.dropshot_tiles.append(TileState(packet.tile_state[tile]))
             break
 
-        #for team in range(0, self.num_teams):
-        #    self.teams.append(Team(packet.teams[team]))
+        #   for team in range(0, self.num_teams):
+        #   self.teams.append(Team(packet.teams[team]))
 
 
 class Car:
@@ -54,6 +54,12 @@ class Vector3:
         self.x = x
         self.y = y
         self.z = z
+
+    def __add__(self, val):
+        return Vector3(self.x + val.x, self.y + val.y, self.z + val.z)
+
+    def __sub__(self, val):
+        return Vector3(self.x - val.x, self.y - val.y, self.z - val.z)
 
 
 class Rotation:
@@ -141,7 +147,7 @@ class FieldInfo:
             self.boost_pads.append(BoostPad(field.boost_pads[boost]))
 
         for goal in range(0, self.num_goals):
-            self.goals.append(Goal(field.boost_pads[goal]))
+            self.goals.append(Goal(field.goals[goal]))
 
 
 class BoostPad:
