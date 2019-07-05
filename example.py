@@ -12,14 +12,14 @@ class PythonExample(BaseAgent):
         # This runs once before the bot starts up
         self.controller_state = SimpleControllerState()
 
-    def get_output(self, packet:GameTickPacket) -> SimpleControllerState:
+    def get_output(self, packet: GameTickPacket) -> SimpleControllerState:
         field = FieldInfo(self.get_field_info())
         game = Packet(packet)
 
         my_car = game.game_cars[self.index]
         ball = game.game_ball
 
-        steer_correction_radians = my_car.move_to(ball.physics.location)
+        steer_correction_radians = my_car.get_steer_correction(ball.physics.location)
         text = "Lets get that ball"
 
         if steer_correction_radians > 0:
@@ -107,7 +107,7 @@ class Car:
         self.team = car.team
         self.boost = car.boost
 
-    def move_to(self, destenation: 'Vector3') -> float:
+    def get_steer_correction(self, destenation: 'Vector3') -> float:
         car_direction = self.get_facing_vector()
         car_to_ball = destenation - self.physics.location
         turn_correction = self.correction_to(car_direction, car_to_ball)
