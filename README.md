@@ -1,5 +1,5 @@
 # Usage
-paste classes in code
+example.py contains the example bot written in an more correct OOP manner. using the gamedata parser
 
 # initialize
 Initialize the parser class with the packet data from get_output()
