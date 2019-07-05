@@ -1,4 +1,57 @@
+import math
+
+from typing import List
+
+from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
+from rlbot.utils.structures.game_data_struct import GameTickPacket
+
+
+class PythonExample(BaseAgent):
+
+    def initialize_agent(self):
+        # This runs once before the bot starts up
+        self.controller_state = SimpleControllerState()
+
+    def get_output(self, packet:GameTickPacket) -> SimpleControllerState:
+        field = FieldInfo(self.get_field_info())
+        game = Packet(packet)
+
+        my_car = game.game_cars[self.index]
+        ball = game.game_ball
+
+        steer_correction_radians = my_car.move_to(ball.physics.location)
+        text = "Lets get that ball"
+
+        if steer_correction_radians > 0:
+            self.controller_state.steer = -1.0
+        else:
+            self.controller_state.steer = 1.0
+
+        if steer_correction_radians > -0.5 and steer_correction_radians < 0.5:
+            self.controller_state.throttle = 1
+        else:
+            self.controller_state.throttle = 0.2
+
+        self.draw_debug(packet.game_cars[0], text)
+        return self.controller_state
+
+    def draw_debug(self, car, action_display):
+        self.renderer.begin_rendering()
+        # print the action that the bot is taking
+        self.renderer.draw_string_3d(car.physics.location, 2, 2, action_display, self.renderer.white())
+        self.renderer.end_rendering()
+
+
 class Packet:
+    num_cars: int
+    num_boost: int
+    num_tiles: int
+    num_teams: int
+    game_cars: List['Car']
+    game_boosts: List['GameBoosts']
+    dropshot_tiles: List['TileState']
+    teams: List['Team']
+
     def __init__(self, packet):
         self.num_cars = packet.num_cars
         self.num_boost = packet.num_boost
@@ -9,7 +62,7 @@ class Packet:
         self.game_ball = GameBall(packet.game_ball)
         self.game_info = GameInfo(packet.game_info)
         self.dropshot_tiles = []
-        #   self.teams: []
+        self.teams = []
 
         for car in range(0, self.num_cars):
             self.game_cars.append(Car(packet.game_cars[car]))
@@ -22,11 +75,23 @@ class Packet:
             self.dropshot_tiles.append(TileState(packet.tile_state[tile]))
             break
 
-        #   for team in range(0, self.num_teams):
-        #   self.teams.append(Team(packet.teams[team]))
+        for team in range(0, self.num_teams):
+            self.teams.append(Team(packet.teams[team]))
 
 
 class Car:
+    physics: 'Physics'
+    score_info: 'ScoreInfo'
+    is_demolished: bool
+    has_wheel_contact: bool
+    is_super_sonic: bool
+    is_bot: bool
+    jumped: bool
+    double_jumped: bool
+    name: str
+    team: int
+    boost: float
+
     def __init__(self, car):
         self.physics = Physics(car.physics)
         self.score_info = ScoreInfo(car.score_info)
@@ -40,8 +105,43 @@ class Car:
         self.team = car.team
         self.boost = car.boost
 
+    def move_to(self, destenation: 'Vector3') -> float:
+        car_direction = self.get_facing_vector()
+        car_to_ball = destenation - self.physics.location
+        turn_correction = self.correction_to(car_direction, car_to_ball)
+        return turn_correction
+
+    def correction_to(self, car_direction: 'Vector3', ideal_direction: 'Vector3') -> float:
+        # The in-game axes are left handed, so use -x
+        current_in_radians = math.atan2(car_direction.y, -car_direction.x)
+        ideal_in_radians = math.atan2(ideal_direction.y, -ideal_direction.x)
+
+        correction = ideal_in_radians - current_in_radians
+
+        # Make sure we go the 'short way'
+        if abs(correction) > math.pi:
+            if correction < 0:
+                correction += 2 * math.pi
+            else:
+                correction -= 2 * math.pi
+        return correction
+
+    def get_facing_vector(self) -> 'Vector3':
+        pitch = float(self.physics.rotation.pitch)
+        yaw = float(self.physics.rotation.yaw)
+
+        facing_x = math.cos(pitch) * math.cos(yaw)
+        facing_y = math.cos(pitch) * math.sin(yaw)
+
+        return Vector3(facing_x, facing_y)
+
 
 class Physics:
+    location: 'Vector3'
+    rotation: 'Rotation'
+    velocity: 'Vector3'
+    angular_velocity: 'Vector3'
+
     def __init__(self, physics):
         self.location = Vector3(physics.location.x, physics.location.y, physics.location.z)
         self.rotation = Rotation(physics.rotation.pitch, physics.rotation.yaw, physics.rotation.roll)
@@ -50,10 +150,14 @@ class Physics:
 
 
 class Vector3:
+    x: float
+    y: float
+    z: float
+
     def __init__(self, x=0, y=0, z=0):
-        self.x = x
-        self.y = y
-        self.z = z
+        self.x = float(x)
+        self.y = float(y)
+        self.z = float(z)
 
     def __add__(self, val):
         return Vector3(self.x + val.x, self.y + val.y, self.z + val.z)
@@ -63,13 +167,25 @@ class Vector3:
 
 
 class Rotation:
+    pitch: float
+    yaw: float
+    roll: float
+
     def __init__(self, pitch=0, yaw=0, roll=0):
-        self.pitch = pitch
-        self.yaw = yaw
-        self.roll = roll
+        self.pitch = float(pitch)
+        self.yaw = float(yaw)
+        self.roll = float(roll)
 
 
 class ScoreInfo:
+    score: int
+    goals: int
+    own_goals: int
+    assists: int
+    saves: int
+    shots: int
+    demolitions: int
+
     def __init__(self, score_info):
         self.score = score_info.score
         self.goals = score_info.goals
@@ -81,12 +197,19 @@ class ScoreInfo:
 
 
 class GameBoosts:
+    is_active: bool
+    timer: float
+
     def __init__(self, boost):
         self.is_active = boost.is_active
         self.timer = boost.timer
 
 
 class GameBall:
+    Physics: 'Physics'
+    latest_touch: 'LatestTouch'
+    drop_shot_info: 'DropShotInfo'
+
     def __init__(self, ball):
         self.physics = Physics(ball.physics)
         self.latest_touch = LatestTouch(ball.latest_touch)
@@ -94,6 +217,12 @@ class GameBall:
 
 
 class LatestTouch:
+    player_name: str
+    time_seconds: float
+    hit_location: 'Vector3'
+    hit_normal: 'Vector3'
+    team: int
+
     def __init__(self, touch):
         self.player_name = touch.player_name
         self.time_seconds = touch.time_seconds
@@ -103,6 +232,10 @@ class LatestTouch:
 
 
 class DropShotInfo:
+    damage_index: int
+    absorbed_force: int
+    force_accum_recent: int
+
     def __init__(self, info):
         self.damage_index = info.damage_index
         self.absorbed_force = info.absorbed_force
@@ -110,6 +243,16 @@ class DropShotInfo:
 
 
 class GameInfo:
+    seconds_elapsed: float
+    game_time_remaining: float
+    is_overtime: bool
+    is_unlimited_time: bool
+    is_round_active: bool
+    is_kickoff_pause: bool
+    is_match_ended: bool
+    world_gravity_z: float
+    game_speed: float
+
     def __init__(self, game_info):
         self.seconds_elapsed = game_info.seconds_elapsed
         self.game_time_remaining = game_info.game_time_remaining
@@ -124,19 +267,29 @@ class GameInfo:
 
 class TileState:
     def __init__(self, state):
-        self.tile_state = state.Tile_state  # 0 == UNKNOWN
+        tile_state: int
+
+        self.tile_state = state.tile_state  # 0 == UNKNOWN
                                             # 1 == FILLED
                                             # 2 == DAMAGED
                                             # 3 == OPEN
 
 
 class Team:
+    team_index: int
+    score: int
+
     def __init__(self, team):
         self.team_index = team.team_index
         self.score = team.score
 
 
 class FieldInfo:
+    num_boosts: int
+    num_goals: int
+    boost_pads: List['BoostPad']
+    goals: List['Goal']
+
     def __init__(self, field):
         self.num_boosts = field.num_boosts
         self.num_goals = field.num_goals
@@ -151,13 +304,20 @@ class FieldInfo:
 
 
 class BoostPad:
+    location: 'Vector3'
+    is_full_boost: bool
+
     def __init__(self, boost):
         self.location = Vector3(boost.location.x, boost.location.y, boost.location.z)
         self.is_full_boost = boost.is_full_boost
 
 
 class Goal:
+    team_num: int
+    location: 'Vector3'
+    direction: 'Vector3'
+
     def __init__(self, goal):
-        self.team_num = goal.team_num,
+        self.team_num = goal.team_num
         self.location = Vector3(goal.location.x, goal.location.y, goal.location.z)
         self.direction = Vector3(goal.direction.x, goal.direction.y, goal.direction.z)
