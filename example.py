@@ -32,13 +32,13 @@ class PythonExample(BaseAgent):
         else:
             self.controller_state.throttle = 0.2
 
-        self.draw_debug(packet.game_cars[0], text)
+        self.draw_debug(packet, my_car, text)
         return self.controller_state
 
-    def draw_debug(self, car, action_display):
+    def draw_debug(self, packet, car, action_display):
         self.renderer.begin_rendering()
         # print the action that the bot is taking
-        self.renderer.draw_string_3d(car.physics.location, 2, 2, action_display, self.renderer.white())
+        self.renderer.draw_string_3d(packet.game_cars[car.index].physics.location, 2, 2, action_display, self.renderer.white())
         self.renderer.end_rendering()
 
 
@@ -65,7 +65,7 @@ class Packet:
         self.teams = []
 
         for car in range(0, self.num_cars):
-            self.game_cars.append(Car(packet.game_cars[car]))
+            self.game_cars.append(Car(packet.game_cars[car], car))
 
         for boost in range(0, self.num_boost):
             self.game_boosts.append(GameBoosts(packet.game_boosts[boost]))
@@ -80,6 +80,7 @@ class Packet:
 
 
 class Car:
+    index: int
     physics: 'Physics'
     score_info: 'ScoreInfo'
     is_demolished: bool
@@ -92,7 +93,8 @@ class Car:
     team: int
     boost: float
 
-    def __init__(self, car):
+    def __init__(self, car, index):
+        self.index = index
         self.physics = Physics(car.physics)
         self.score_info = ScoreInfo(car.score_info)
         self.is_demolished = car.is_demolished
