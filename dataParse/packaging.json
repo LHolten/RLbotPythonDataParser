@@ -1,8 +1,9 @@
 {
     "name": "RLbotPythonDataParser",
-    "url": "https://github.com/ard1998/RLbotPythonDataParser/tree/repo-test",
+    "url": "https://github.com/ard1998/RLbotPythonDataParser",
+    "branch": "repo-test"
     "testedFrameworkVersion": "1.20",
-    "version": "0",
+    "version": "1.0",
     "category": [
         {
             "name": "Example"
@@ -24,5 +25,5 @@
         {
             "name": "4v4"
         }
-    ]
+    ] 
 }
