@@ -1,7 +1,7 @@
 {
     "name": "RLbotPythonDataParser",
     "url": "https://github.com/ard1998/RLbotPythonDataParser",
-    "branch": "repo-test"
+    "branch": "repo-test",
     "testedFrameworkVersion": "1.20",
     "version": "1.0",
     "category": [
