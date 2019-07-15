@@ -7,10 +7,7 @@ from rlbot.utils.structures.game_data_struct import GameTickPacket
 
 
 class PythonExample(BaseAgent):
-
-    def initialize_agent(self):
-        # This runs once before the bot starts up
-        self.controller_state = SimpleControllerState()
+    controller_state = SimpleControllerState()
 
     def get_output(self, packet: GameTickPacket) -> SimpleControllerState:
         field = FieldInfo(self.get_field_info())
@@ -22,12 +19,9 @@ class PythonExample(BaseAgent):
         steer_correction_radians = my_car.get_steer_correction(ball.physics.location)
         text = "Lets get that ball"
 
-        if steer_correction_radians > 0:
-            self.controller_state.steer = -1.0
-        else:
-            self.controller_state.steer = 1.0
+        self.controller_state.steer = math.copysign(1, steer_correction_radians)
 
-        if steer_correction_radians > -0.5 and steer_correction_radians < 0.5:
+        if abs(steer_correction_radians) < 0.5:
             self.controller_state.throttle = 1
         else:
             self.controller_state.throttle = 0.2
@@ -107,35 +101,12 @@ class Car:
         self.team = car.team
         self.boost = car.boost
 
-    def get_steer_correction(self, destenation: 'Vector3') -> float:
-        car_direction = self.get_facing_vector()
-        car_to_ball = destenation - self.physics.location
-        turn_correction = self.correction_to(car_direction, car_to_ball)
+    def get_steer_correction(self, destination: 'Vector3') -> float:
+        car_forward = self.physics.rotation.forward()
+        car_left = self.physics.rotation.left()
+        car_to_ball = destination - self.physics.location
+        turn_correction = math.atan2(car_left.dot(car_to_ball), car_forward.dot(car_to_ball))
         return turn_correction
-
-    def correction_to(self, car_direction: 'Vector3', ideal_direction: 'Vector3') -> float:
-        # The in-game axes are left handed, so use -x
-        current_in_radians = math.atan2(car_direction.y, -car_direction.x)
-        ideal_in_radians = math.atan2(ideal_direction.y, -ideal_direction.x)
-
-        correction = ideal_in_radians - current_in_radians
-
-        # Make sure we go the 'short way'
-        if abs(correction) > math.pi:
-            if correction < 0:
-                correction += 2 * math.pi
-            else:
-                correction -= 2 * math.pi
-        return correction
-
-    def get_facing_vector(self) -> 'Vector3':
-        pitch = float(self.physics.rotation.pitch)
-        yaw = float(self.physics.rotation.yaw)
-
-        facing_x = math.cos(pitch) * math.cos(yaw)
-        facing_y = math.cos(pitch) * math.sin(yaw)
-
-        return Vector3(facing_x, facing_y)
 
 
 class Physics:
@@ -145,10 +116,10 @@ class Physics:
     angular_velocity: 'Vector3'
 
     def __init__(self, physics):
-        self.location = Vector3(physics.location.x, physics.location.y, physics.location.z)
-        self.rotation = Rotation(physics.rotation.pitch, physics.rotation.yaw, physics.rotation.roll)
-        self.velocity = Vector3(physics.velocity.x, physics.velocity.y, physics.velocity.z)
-        self.angular_velocity = Vector3(physics.angular_velocity.x, physics.angular_velocity.y, physics.angular_velocity.z)
+        self.location = Vector3.from_struct(physics.location)
+        self.rotation = Rotation(physics.rotation)
+        self.velocity = Vector3.from_struct(physics.velocity)
+        self.angular_velocity = Vector3.from_struct(physics.angular_velocity)
 
 
 class Vector3:
@@ -156,16 +127,54 @@ class Vector3:
     y: float
     z: float
 
-    def __init__(self, x=0, y=0, z=0):
+    def __init__(self, x=0., y=0., z=0.):
         self.x = float(x)
         self.y = float(y)
         self.z = float(z)
 
-    def __add__(self, val):
-        return Vector3(self.x + val.x, self.y + val.y, self.z + val.z)
+    def __add__(self, vec: 'Vector3'):
+        return Vector3.from_iter(a + b for a, b in zip(self, vec))
 
-    def __sub__(self, val):
-        return Vector3(self.x - val.x, self.y - val.y, self.z - val.z)
+    def __sub__(self, vec: 'Vector3'):
+        return Vector3.from_iter(a - b for a, b in zip(self, vec))
+
+    def __mul__(self, val: float):
+        return Vector3.from_iter(a * val for a in self)
+
+    def __truediv__(self, val):
+        return Vector3.from_iter(a / val for a in self)
+
+    def __iter__(self):
+        return iter((self.x, self.y, self.z))
+
+    def __repr__(self):
+        return repr((self.x, self.y, self.z))
+
+    def copy(self, x=None, y=None, z=None):
+        x = self.x if x is None else x
+        y = self.y if y is None else y
+        z = self.z if z is None else z
+        return Vector3(x, y, z)
+
+    def flatten(self):
+        return self.copy(z=0)
+
+    def norm(self):
+        return math.sqrt(self.dot(self))
+
+    def normalize(self):
+        return self / self.norm()
+
+    def dot(self, vec):
+        return sum(a * b for a, b in zip(self, vec))
+
+    @staticmethod
+    def from_iter(iterator):
+        return Vector3(*list(iterator))
+
+    @staticmethod
+    def from_struct(struct):
+        return Vector3(struct.x, struct.y, struct.z)
 
 
 class Rotation:
@@ -173,10 +182,38 @@ class Rotation:
     yaw: float
     roll: float
 
-    def __init__(self, pitch=0, yaw=0, roll=0):
-        self.pitch = float(pitch)
-        self.yaw = float(yaw)
-        self.roll = float(roll)
+    def __init__(self, rotation):
+        self.pitch = rotation.pitch
+        self.yaw = rotation.yaw
+        self.roll = rotation.roll
+
+    def forward(self):
+        c_p = math.cos(self.pitch)
+        s_p = math.sin(self.pitch)
+        c_y = math.cos(self.yaw)
+        s_y = math.sin(self.yaw)
+
+        return Vector3(c_p * c_y, c_p * s_y, s_p)
+
+    def left(self):
+        c_r = math.cos(self.roll)
+        s_r = math.sin(self.roll)
+        c_p = math.cos(self.pitch)
+        s_p = math.sin(self.pitch)
+        c_y = math.cos(self.yaw)
+        s_y = math.sin(self.yaw)
+
+        return Vector3(c_y * s_p * s_r - c_r * s_y, s_y * s_p * s_r + c_r * c_y, -c_p * s_r)
+
+    def up(self):
+        c_r = math.cos(self.roll)
+        s_r = math.sin(self.roll)
+        c_p = math.cos(self.pitch)
+        s_p = math.sin(self.pitch)
+        c_y = math.cos(self.yaw)
+        s_y = math.sin(self.yaw)
+
+        return Vector3(-c_r * c_y * s_p - s_r * s_y, -c_r * s_y * s_p + s_r * c_y, c_p * c_r)
 
 
 class ScoreInfo:
@@ -268,13 +305,14 @@ class GameInfo:
 
 
 class TileState:
-    def __init__(self, state):
-        tile_state: int
+    tile_state: int
 
-        self.tile_state = state.tile_state  # 0 == UNKNOWN
-                                            # 1 == FILLED
-                                            # 2 == DAMAGED
-                                            # 3 == OPEN
+    def __init__(self, state):
+        # 0 == UNKNOWN
+        # 1 == FILLED
+        # 2 == DAMAGED
+        # 3 == OPEN
+        self.tile_state = state.tile_state
 
 
 class Team:
