@@ -1,4 +1,4 @@
-# RLBotPythonExample
+# RLBotPythonDataParser
 Example of a python bot using the RLBot framework
 
 ## Installation
